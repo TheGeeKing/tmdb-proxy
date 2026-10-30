@@ -4,5 +4,6 @@
 !.env.example
 *.exe
 coverage.out
+dist
 docs
 README.md

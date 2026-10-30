@@ -109,6 +109,31 @@ go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
 Tests use an HTTP mock upstream and miniredis, a Valkey/Redis protocol-compatible fixture, with no real TMDB credential. They cover freshness and expiration, blocking refresh, no stale fallback, simultaneous requests, canonical query/version isolation, route and append validation, rejected credentials/writes, response/error bytes, Retry-After, cache read/write failures, TLS configuration, startup validation, CORS, timeouts, size limits, redirects and private v4 lists. Fixture tests do not replace a real Valkey or Docker smoke test. Real TMDB access requires your token; no test sends requests to TMDB.
 
+## Releases
+
+Pushing a version tag such as `v1.0.0` runs `.github/workflows/release.yml`. It checks formatting, runs vet and race-enabled tests, then builds standalone binaries for Linux, macOS (`darwin`) and Windows on amd64 and arm64. The GitHub release includes those binaries, `env.example`, SHA-256 checksums and generated release notes. Tags such as `v1.1.0-rc.1` create prereleases. No TMDB token or additional GitHub secret is needed; the workflow uses GitHub's built-in token with release write permission.
+
+After committing the workflow and pushing the branch to your GitHub repository, publish the first release with:
+
+```sh
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+Use a new version tag for each release. The workflow does not overwrite an existing GitHub release. Release binaries still need a reachable Valkey instance and your private TMDB token. Copy the downloaded `env.example` to `.env`, configure them, and run the binary. Never upload your local `.env` as a release asset.
+
+The same workflow publishes a multi-platform container to **GitHub Container Registry (GHCR)** for Linux amd64 and arm64:
+
+```sh
+docker pull ghcr.io/owner/repository:1.0.0
+```
+
+Replace `owner/repository` with your lowercase GitHub repository path. Git tags retain the `v` prefix; image tags omit it. A stable release such as `v1.2.3` publishes the same image as `:1.2.3`, `:1.2`, `:1`, and `:latest`. Major and minor aliases move on each stable publication: `:1` follows releases within major 1, and `:1.2` follows patches within 1.2. Publish stable versions in increasing order to keep these aliases moving forward. Prereleases such as `v1.3.0-rc.1` publish only `:1.3.0-rc.1`. Pulling an alias gets its current image; existing running containers are not updated automatically.
+
+The workflow uses the built-in GitHub token with `packages: write`; no Docker Hub account or registry secret is needed. For anonymous pulls, make the package public in its GitHub package settings; private packages require registry authentication. Credentials are supplied at runtime, never built into the image.
+
+To use the published image with the bundled Valkey, replace `build: .` in compose.yaml with `image: ghcr.io/owner/repository:1` and remove the `develop` section. Keep the existing `.env`, ports, and cache service. Run `docker compose pull relay` followed by `docker compose up -d` to apply the current image for that tag. Use `:1.2` to follow a minor version or `:1.2.3` to pin an exact release.
+
 ## Attribution and limitations
 
 Use an approved TMDB logo in the consuming application's About/Credits area and include TMDB's required endorsement disclaimer. See [TMDB's official attribution and licensing guidance](https://developer.themoviedb.org/docs/faq) for the current exact wording and approved logos. Commercial use may require a separate agreement. This relay does not grant redistribution rights or bypass TMDB's limits.

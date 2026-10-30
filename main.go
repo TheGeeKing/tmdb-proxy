@@ -36,7 +36,7 @@ func run() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	app := newRelay(ctx, cfg, cache, logger)
-	server := &http.Server{Addr: cfg.listen, Handler: app, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: cfg.tmdbTimeout + 3*cfg.valkeyTimeout + 10*time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 << 10}
+	server := &http.Server{Addr: cfg.listen, Handler: app, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: (time.Duration(cfg.tmdbQueueSize+1) * time.Second / time.Duration(cfg.tmdbRPS)) + cfg.tmdbTimeout + 3*cfg.valkeyTimeout + 10*time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 << 10}
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	defer signal.Stop(stop)
@@ -50,7 +50,7 @@ func run() error {
 		return nil
 	case <-stop:
 		logger.Info("shutting down")
-		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), cfg.tmdbTimeout+3*cfg.valkeyTimeout+5*time.Second)
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), (time.Duration(cfg.tmdbQueueSize+1)*time.Second/time.Duration(cfg.tmdbRPS))+cfg.tmdbTimeout+3*cfg.valkeyTimeout+5*time.Second)
 		defer shutdownCancel()
 		if err := server.Shutdown(shutdownCtx); err != nil {
 			cancel()

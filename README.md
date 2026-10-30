@@ -74,13 +74,15 @@ Only the token is required; unset/empty optional settings use these defaults. In
 | `CACHE_TTL_LISTS_SECONDS` | `900` | Lists, discover, movie lists, popular/top-rated/now-playing/upcoming/airing/on-the-air collections: 15 minutes. |
 | `CACHE_TTL_TRENDING_SECONDS` | `300` | `/3/trending/*`: 5 minutes. |
 | `CACHE_TTL_REFERENCE_SECONDS` | `604800` | Configuration, certifications, genres, watch-provider catalogs: 7 days. |
+| `TMDB_REQUESTS_PER_SECOND` | `40` | Upstream requests/second per process, shared across all routes; evenly paced without bursts. |
+| `TMDB_QUEUE_SIZE` | `200` | Maximum distinct misses waiting for dispatch; excess receives local 429 with Retry-After. |
 | `TMDB_TIMEOUT_SECONDS` | `15` | Deadline for the complete upstream request including body. |
 | `VALKEY_TIMEOUT_SECONDS` | `2` | Deadline per cache operation and connection timeout. |
 | `MAX_RESPONSE_BYTES` | `10485760` | Maximum upstream body, successful or otherwise: 10 MiB. |
 | `CORS_ALLOWED_ORIGINS` | empty | CORS disabled; comma-separated exact HTTP(S) origins without trailing slash, or `*`. No credentialed CORS. |
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, or `error`. |
 
-TTL and timeout values are positive integer seconds up to 2592000 (30 days); response size is 1–1073741824 bytes. Keep timeouts small in practice. CORS controls browsers, not access to this anonymous service. GET preflights are supported for configured origins without custom request headers.
+Rate and queue size are integers from 1 to 10000. TTL and timeout values are positive integer seconds up to 2592000 (30 days); response size is 1–1073741824 bytes. Keep timeouts small in practice. CORS controls browsers, not access to this anonymous service. GET preflights are supported for configured origins without custom request headers.
 
 Authenticated and TLS cache examples:
 
@@ -109,7 +111,7 @@ The upstream is fixed to `https://api.themoviedb.org`; redirects are returned wi
 - A missing or expired entry waits for a full TMDB fetch. There is no stale-while-revalidate, background refresh, or stale fallback.
 - Only valid JSON with a JSON media type and a 2xx status is eligible. Upstream no-store/private/no-cache directives are honored; shorter max-age/s-maxage values (minus upstream Age) also reduce the configured TTL.
 - A successful eligible fetch writes Valkey with a TTL **before returning**. The stored envelope preserves the exact body bytes, status and selected headers. Its absolute freshness deadline also prevents extending freshness during reads.
-- Upstream errors, including 429 and Retry-After, are returned immediately and never cached. An expired success is never substituted for an error.
+- Upstream errors, including 429 and Retry-After, are returned without retrying and never cached. A 429 pauses new upstream dispatches for its Retry-After (integer seconds or HTTP date; integer values capped at 30 days), with a 1-second fallback. Existing in-flight calls may still complete. An expired success is never substituted for an error.
 - Valkey read failures are treated as misses. Write failures return the successful upstream response with `Cache-Control: no-store`. Corrupt cache entries are treated as misses. Liveness remains healthy, but readiness fails if Valkey cannot answer PING.
 - Simultaneous identical requests share a fetch **within one process**, including cache failures and upstream errors. Each instance has its own in-flight group; there is no distributed lock. A disconnected caller stops waiting; the shared fetch continues under a bounded service context for other waiters.
 - Cache keys hash the API version, path and canonical query, with a credential-derived namespace to isolate operators sharing a cache. Rotating the token starts a new namespace; old entries expire naturally.
@@ -155,5 +157,7 @@ Use `compose.prod.yaml` to run the published image with the bundled Valkey, as d
 ## Attribution and limitations
 
 Use an approved TMDB logo in the consuming application's About/Credits area and include TMDB's required endorsement disclaimer. See [TMDB's official attribution and licensing guidance](https://developer.themoviedb.org/docs/faq) for the current exact wording and approved logos. Commercial use may require a separate agreement. This relay does not grant redistribution rights or bypass TMDB's limits.
+
+Cache hits bypass the upstream limiter; identical simultaneous misses share one queue slot. A cache miss dispatches immediately when rate capacity is available. Only misses exceeding the paced rate queue before the separate upstream timeout begins; there is no separate queue timeout. Queue overflow returns 429 with Retry-After estimating when the current queue clears (at least 1 second); new traffic can extend that wait. During a TMDB cooldown, misses receive 429 immediately, and already queued misses are released with 429 too. Retry-After reflects the remaining TMDB cooldown (HTTP dates are preserved), without adding queue time. Queue order is not guaranteed. TMDB [documents a changeable ceiling around 40 requests/second](https://developer.themoviedb.org/docs/rate-limiting), without endpoint-specific budgets; the default is 40; lower it if TMDB throttles your traffic. The limiter and cooldown are per process, including during cache outages. Divide the configured rate across replicas or other applications sharing the token; restarts reset the budget and cooldown.
 
 There are no client quotas or live upstream retries; TMDB can throttle the shared operator token. Every distinct miss consumes upstream access, and bodies are buffered in memory up to the configured limit per distinct in-flight request. This service does not impose a total concurrency or aggregate memory bound. Use deployment resource limits appropriate to expected traffic. Private and personalized endpoints are intentionally unavailable. Changes to public lists are visible after their TTL, unless the entry is evicted earlier. New TMDB endpoints require a reviewed allowlist update.

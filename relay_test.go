@@ -112,6 +112,8 @@ func TestCacheRefreshAndNoStale(t *testing.T) {
 	db.FastForward(25 * time.Hour)
 	mode.Store(2)
 	for i := 0; i < 2; i++ {
+		// Clear cooldown to verify each upstream error is returned without caching.
+		s.limiter = newUpstreamLimiter(s.cfg)
 		w := request(s, "GET", "/3/movie/550?language=fr&page=1")
 		if w.Code != 429 || w.Body.String() != `{"error":"limited"}` || w.Header().Get("Retry-After") != "42" || w.Header().Get("Cache-Control") != "no-store" {
 			t.Fatalf("error preservation: %d %s", w.Code, w.Body)
@@ -321,7 +323,7 @@ func TestConfigAndExample(t *testing.T) {
 	if _, err := loadConfig(get); err != nil {
 		t.Fatalf("example: %v", err)
 	}
-	for key, bad := range map[string]string{"TMDB_READ_ACCESS_TOKEN": "", "LISTEN_ADDR": "invalid", "VALKEY_URL": "https://user:secret@host", "TMDB_API_VERSIONS": "3,5", "CACHE_TTL_DETAILS_SECONDS": "0", "CACHE_TTL_SEARCH_SECONDS": "no", "CACHE_TTL_LISTS_SECONDS": "-1", "CACHE_TTL_TRENDING_SECONDS": "0", "CACHE_TTL_REFERENCE_SECONDS": "999999999999999", "TMDB_TIMEOUT_SECONDS": "0", "VALKEY_TIMEOUT_SECONDS": "0", "MAX_RESPONSE_BYTES": "0", "CORS_ALLOWED_ORIGINS": "https://host/path", "LOG_LEVEL": "secret"} {
+	for key, bad := range map[string]string{"TMDB_READ_ACCESS_TOKEN": "", "LISTEN_ADDR": "invalid", "VALKEY_URL": "https://user:secret@host", "TMDB_API_VERSIONS": "3,5", "CACHE_TTL_DETAILS_SECONDS": "0", "CACHE_TTL_SEARCH_SECONDS": "no", "CACHE_TTL_LISTS_SECONDS": "-1", "CACHE_TTL_TRENDING_SECONDS": "0", "CACHE_TTL_REFERENCE_SECONDS": "999999999999999", "TMDB_TIMEOUT_SECONDS": "0", "VALKEY_TIMEOUT_SECONDS": "0", "MAX_RESPONSE_BYTES": "0", "TMDB_REQUESTS_PER_SECOND": "0", "TMDB_QUEUE_SIZE": "-1", "CORS_ALLOWED_ORIGINS": "https://host/path", "LOG_LEVEL": "secret"} {
 		old := env[key]
 		env[key] = bad
 		if _, err := loadConfig(get); err == nil {
@@ -366,6 +368,7 @@ func TestResponsePreservation(t *testing.T) {
 				_, _ = io.WriteString(w, body)
 			})
 			for i := 0; i < 2; i++ {
+				s.limiter = newUpstreamLimiter(s.cfg)
 				w := request(s, "GET", "/3/movie/1", "Accept-Language", "fr", "If-None-Match", `"version1"`)
 				if w.Code != status || w.Body.String() != body || w.Header().Get("Content-Type") != "application/json; charset=utf-8" || w.Header().Get("Retry-After") != "Wed, 01 Jan 2031 00:00:00 GMT" || w.Header().Get("ETag") != `"version1"` || w.Header().Get("Set-Cookie") != "" {
 					t.Fatalf("response not preserved: %d %s", w.Code, w.Body)

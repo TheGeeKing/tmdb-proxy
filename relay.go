@@ -37,6 +37,7 @@ type relay struct {
 	ctx       context.Context
 	flights   singleflight.Group
 	log       *slog.Logger
+	limiter   *upstreamLimiter
 	namespace string
 }
 
@@ -45,7 +46,7 @@ func newRelay(ctx context.Context, c config, cache valkey.Client, logger *slog.L
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.MaxIdleConnsPerHost = 32
 	transport.ResponseHeaderTimeout = c.tmdbTimeout
-	return &relay{cfg: c, cache: cache, ctx: ctx, base: upstreamHost, log: logger, namespace: hex.EncodeToString(sum[:]), http: &http.Client{Timeout: c.tmdbTimeout, Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
+	return &relay{limiter: newUpstreamLimiter(c), cfg: c, cache: cache, ctx: ctx, base: upstreamHost, log: logger, namespace: hex.EncodeToString(sum[:]), http: &http.Client{Timeout: c.tmdbTimeout, Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
 }
 func problem(w http.ResponseWriter, status int, message string) {
 	w.Header().Set("Cache-Control", "no-store")
@@ -164,6 +165,12 @@ func localResponse(status int, msg string) *response {
 	return &response{Status: status, Body: b, Header: http.Header{"Content-Type": []string{"application/json"}}}
 }
 func (s *relay) fetch(key, path, query string) *response {
+	err := s.limiter.wait(s.ctx)
+	if err != nil {
+		resp := localResponse(429, "upstream rate limit reached; retry later")
+		resp.Header.Set("Retry-After", s.limiter.retryAfter())
+		return resp
+	}
 	ctx, cancel := context.WithTimeout(s.ctx, s.cfg.tmdbTimeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, "GET", s.base+path+"?"+query, nil)
@@ -181,6 +188,9 @@ func (s *relay) fetch(key, path, query string) *response {
 		return localResponse(502, "upstream request failed")
 	}
 	defer upstream.Body.Close()
+	if upstream.StatusCode == http.StatusTooManyRequests {
+		s.limiter.pause(upstream.Header.Get("Retry-After"))
+	}
 	body, err := io.ReadAll(io.LimitReader(upstream.Body, s.cfg.maxBytes+1))
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {

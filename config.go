@@ -21,6 +21,7 @@ type config struct {
 	ttlDetails, ttlSearch, ttlLists, ttlTrending, ttlReference time.Duration
 	tmdbTimeout, valkeyTimeout                                 time.Duration
 	maxBytes                                                   int64
+	tmdbRPS, tmdbQueueSize                                     int
 	origins                                                    map[string]bool
 	level                                                      slog.Level
 }
@@ -76,6 +77,19 @@ func loadConfig(get func(string) string) (config, error) {
 			return c, fmt.Errorf("%s must be an integer between 1 and 2592000", item.k)
 		}
 		*item.dst = time.Duration(n) * time.Second
+	}
+	for _, item := range []struct {
+		key, fallback string
+		dst           *int
+	}{
+		{"TMDB_REQUESTS_PER_SECOND", "40", &c.tmdbRPS},
+		{"TMDB_QUEUE_SIZE", "200", &c.tmdbQueueSize},
+	} {
+		n, e := strconv.Atoi(value(item.key, item.fallback))
+		if e != nil || n < 1 || n > 10000 {
+			return c, fmt.Errorf("%s must be an integer between 1 and 10000", item.key)
+		}
+		*item.dst = n
 	}
 	c.maxBytes, err = strconv.ParseInt(value("MAX_RESPONSE_BYTES", "10485760"), 10, 64)
 	if err != nil || c.maxBytes < 1 || c.maxBytes > 1073741824 {

@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/TheGeeKing/tmdb-proxy/compare/v1.1.0...v1.1.1) (2026-10-30)
+
+
+### Bug Fixes
+
+* support Portainer stack environment variables ([dcb21f3](https://github.com/TheGeeKing/tmdb-proxy/commit/dcb21f30871e8d54027dd38db74e0edd3fe8106b))
+
 ## [1.1.0](https://github.com/TheGeeKing/tmdb-proxy/compare/v1.0.0...v1.1.0) (2026-10-30)
 
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/TheGeeKing/tmdb-proxy/compare/v1.1.1...v1.2.0) (2026-10-30)
+
+
+### Features
+
+* add upstream rate limiting with bounded queuing and cooldown propagation ([80fa069](https://github.com/TheGeeKing/tmdb-proxy/commit/80fa06914b096cbf7ae78bd0edc4d1f68188f503))
+
 ## [1.1.1](https://github.com/TheGeeKing/tmdb-proxy/compare/v1.1.0...v1.1.1) (2026-10-30)
 
 

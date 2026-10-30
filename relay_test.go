@@ -61,6 +61,40 @@ func jsonReply(w http.ResponseWriter, body string) {
 	_, _ = io.WriteString(w, body)
 }
 
+func TestConfigEndpoint(t *testing.T) {
+	for _, limits := range [][2]int{{40, 200}, {7, 12}} {
+		c, err := loadConfig(func(key string) string {
+			switch key {
+			case "TMDB_READ_ACCESS_TOKEN":
+				return "operator-secret-token"
+			case "TMDB_REQUESTS_PER_SECOND":
+				return fmt.Sprint(limits[0])
+			case "TMDB_QUEUE_SIZE":
+				return fmt.Sprint(limits[1])
+			case "CACHE_TTL_SEARCH_SECONDS":
+				return fmt.Sprint(limits[0])
+			default:
+				return ""
+			}
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		s := &relay{cfg: c}
+		w := request(s, "GET", "/config")
+		if w.Code != http.StatusOK || w.Header().Get("Content-Type") != "application/json" || w.Header().Get("Cache-Control") != "no-store" {
+			t.Fatalf("unexpected response: %d %v", w.Code, w.Header())
+		}
+		want := fmt.Sprintf(`{"cache_ttl_seconds":{"details":86400,"lists":900,"reference":604800,"search":%d,"trending":300},"rate_limit":{"queue_size":%d,"requests_per_second":%d}}`, limits[0], limits[1], limits[0])
+		if strings.TrimSpace(w.Body.String()) != want {
+			t.Fatalf("unexpected config: %s", w.Body)
+		}
+		if w := request(s, "POST", "/config"); w.Code != http.StatusMethodNotAllowed || w.Header().Get("Allow") != "GET" {
+			t.Fatalf("unexpected method response: %d %v", w.Code, w.Header())
+		}
+	}
+}
+
 func TestCacheRefreshAndNoStale(t *testing.T) {
 	var calls atomic.Int32
 	var mode atomic.Int32

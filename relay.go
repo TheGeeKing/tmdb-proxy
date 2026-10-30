@@ -84,6 +84,23 @@ func (s *relay) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_, _ = io.WriteString(w, `{"status":"ok"}`)
 		return
 	}
+	if r.URL.Path == "/config" {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"rate_limit": map[string]int{
+				"requests_per_second": s.cfg.tmdbRPS,
+				"queue_size":          s.cfg.tmdbQueueSize,
+			},
+			"cache_ttl_seconds": map[string]int64{
+				"details":   int64(s.cfg.ttlDetails / time.Second),
+				"search":    int64(s.cfg.ttlSearch / time.Second),
+				"lists":     int64(s.cfg.ttlLists / time.Second),
+				"trending":  int64(s.cfg.ttlTrending / time.Second),
+				"reference": int64(s.cfg.ttlReference / time.Second),
+			},
+		})
+		return
+	}
 	if r.URL.Path == "/readyz" {
 		ctx, cancel := context.WithTimeout(r.Context(), s.cfg.valkeyTimeout)
 		defer cancel()

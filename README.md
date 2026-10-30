@@ -12,6 +12,7 @@ A small anonymous, read-only TMDB HTTP relay written in Go, with a Valkey respon
 docker compose up --build -d
 curl http://localhost:8080/healthz
 curl http://localhost:8080/readyz
+curl http://localhost:8080/config
 curl 'http://localhost:8080/3/movie/550?language=fr-FR&append_to_response=credits,images'
 curl 'http://localhost:8080/3/search/movie?query=Alien&page=1&region=FR'
 curl 'http://localhost:8080/4/list/1?page=1'
@@ -118,6 +119,8 @@ The upstream is fixed to `https://api.themoviedb.org`; redirects are returned wi
 - Downstream cache headers use the floored **remaining** freshness time with `must-revalidate, proxy-revalidate`. Responses with under one second remaining, errors and uncached results use `no-store`. No stale allowance is advertised. Downstream clients must honor HTTP cache directives; the relay cannot control misconfigured intermediaries.
 
 `GET /healthz` checks that the process can serve HTTP. `GET /readyz` checks Valkey with a timeout, without spending a TMDB call. Neither checks the validity of the operator token. Shutdown drains active requests, bounded by upstream/cache timeouts. Server header, request, write and idle timeouts are set. Compose allows 90 seconds for shutdown with default timeouts; adjust its grace period if increasing them substantially.
+
+`GET /config` returns the instance's public settings as JSON. `rate_limit` contains `requests_per_second` and `queue_size` (per process); `cache_ttl_seconds` contains the configured cache durations for `details`, `search`, `lists`, `trending`, and `reference`, in seconds. Actual cache freshness can be shorter due to upstream cache directives or eviction. The endpoint does not call TMDB or Valkey and uses `Cache-Control: no-store`. Credentials and connection settings are never included.
 
 ## Verification
 

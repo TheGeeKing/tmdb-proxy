@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/TheGeeKing/tmdb-proxy/compare/v1.0.0...v1.1.0) (2026-10-30)
+
+
+### Features
+
+* add production Compose deployment ([3daad12](https://github.com/TheGeeKing/tmdb-proxy/commit/3daad1201a3ad239d412363f5a8d25a946f306bd))
+
 ## 1.0.0 (2026-10-30)
 
 

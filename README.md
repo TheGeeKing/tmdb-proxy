@@ -111,14 +111,13 @@ Tests use an HTTP mock upstream and miniredis, a Valkey/Redis protocol-compatibl
 
 ## Releases
 
-Pushing a version tag such as `v1.0.0` runs `.github/workflows/release.yml`. It checks formatting, runs vet and race-enabled tests, then builds standalone binaries for Linux, macOS (`darwin`) and Windows on amd64 and arm64. The GitHub release includes those binaries, `env.example`, SHA-256 checksums and generated release notes. Tags such as `v1.1.0-rc.1` create prereleases. No TMDB token or additional GitHub secret is needed; the workflow uses GitHub's built-in token with release write permission.
+Release Please runs on pushes to `main` and opens or updates a release PR from Conventional Commits, including the version and CHANGELOG.md. Merge that PR to create the Git tag and GitHub release. The first release defaults to `v1.0.0`; subsequent versions follow commit types (`fix:`, `feat:`, and breaking changes).
 
-After committing the workflow and pushing the branch to your GitHub repository, publish the first release with:
+The same workflow then checks formatting, runs vet and race-enabled tests, builds binaries for Linux, macOS (`darwin`) and Windows on amd64 and arm64, publishes the container, and uploads binaries, `env.example` and SHA-256 checksums to the release. Publishing is driven directly by Release Please's job outputs in the same workflow: it does not depend on a bot-created tag triggering another workflow.
 
-```sh
-git tag v1.0.0
-git push origin v1.0.0
-```
+No custom secrets are needed. GitHub supplies `GITHUB_TOKEN`; the jobs explicitly request release, package and PR permissions. In Settings > Actions > General, enable **Allow GitHub Actions to create and approve pull requests**. Release Please uses that permission to open the PR; it does not automatically approve or merge it. The TMDB token stays in your runtime `.env`. Separate PR-check workflows are not automatically triggered by PRs created using this built-in token; configure a GitHub App or PAT only if you later need that behavior.
+
+Manually pushed version tags remain supported as an alternative. Tags such as `v1.1.0-rc.1` create prereleases. See [Release Please's documentation](https://github.com/googleapis/release-please-action) for the PR/release lifecycle and built-in token behavior.
 
 Use a new version tag for each release. The workflow does not overwrite an existing GitHub release. Release binaries still need a reachable Valkey instance and your private TMDB token. Copy the downloaded `env.example` to `.env`, configure them, and run the binary. Never upload your local `.env` as a release asset.
 

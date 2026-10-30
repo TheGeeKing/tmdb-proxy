@@ -76,6 +76,7 @@ jobs:
             done
           done
           cp .env.example dist/env.example
+          cp compose.prod.yaml dist/compose.prod.yaml
           (cd dist && sha256sum -- * > checksums.txt)
       - name: Container image tags
         id: image

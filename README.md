@@ -21,6 +21,24 @@ Public list IDs can disappear or become private; TMDB may return an error for th
 
 Compose supplies a private-network Valkey with a **256 MiB maximum dataset size and allkeys-lru eviction**, no persistence, and no published cache port. Eviction causes an ordinary cache miss. Valkey process overhead can exceed its dataset limit. Set `PORT` in `.env` to choose the external Docker port (default `8080`); the service uses its built-in `:8080` listener inside the container. Leave `LISTEN_ADDR` unset for Docker. Put your own HTTPS ingress in front of it for public use. `.env` is the single source for service settings: Compose passes it through without replacing `VALKEY_URL`. Its default `redis://valkey:6379/0` reaches the bundled cache; change it in `.env` to use an external cache. The container runs as an unprivileged user with a read-only filesystem. Stop with `docker compose down`.
 
+## Production with released containers
+
+Download `compose.prod.yaml` and `env.example` from a GitHub release into a deployment directory, copy `env.example` to `.env`, and set your TMDB token. If using the repository instead, copy `.env.example`. Keep `VALKEY_URL=redis://valkey:6379/0` for the bundled cache and choose an available external `PORT`. Only the production Compose file and your `.env` are needed to run; no source checkout or Go toolchain is required.
+
+```sh
+docker compose -f compose.prod.yaml pull
+docker compose -f compose.prod.yaml up -d --wait
+docker compose -f compose.prod.yaml ps
+```
+
+The default image is `ghcr.io/thegeeking/tmdb-proxy:1`, which becomes available after the first v1 release has been published. For reproducible deployments, set `RELAY_IMAGE` in `.env` to an exact version such as `ghcr.io/thegeeking/tmdb-proxy:1.0.0` or an image digest. Public package visibility is needed for anonymous pulls; otherwise log in to GHCR first.
+
+The production file runs the relay and Valkey with read-only filesystems, no Linux capabilities, process/CPU/memory limits, health checks and rotated logs. Valkey has no published port, a 256 MiB dataset limit with LRU eviction, and a 512 MiB container memory limit allowing room for overhead. The relay also has a 512 MiB memory limit. These are starting limits: increase them for workloads with many simultaneous distinct requests or large responses. The cache is disposable and has no persistent volume; recreating Valkey clears it. Docker restarts exited processes; a failing health check alone does not restart a container.
+
+The external port serves HTTP; terminate HTTPS at your ingress/reverse proxy. Leave `LISTEN_ADDR` unset so port mapping and health checks use the built-in internal port 8080. Do not run development and production stacks against the same project at the same time. From an existing checkout, stop the development stack before switching to the production file.
+
+To update, run the same `pull` and `up -d --wait` commands again. With a major/minor alias this applies the image currently published for that alias; containers do not update themselves. To roll back, set `RELAY_IMAGE` to a prior exact version and rerun those commands. Inspect logs with `docker compose -f compose.prod.yaml logs --tail=100`; stop with `docker compose -f compose.prod.yaml down`.
+
 ## Development with automatic rebuilds
 
 Use the same `.env` and the same two services:
@@ -47,6 +65,7 @@ Only the token is required; unset/empty optional settings use these defaults. In
 | --- | --- | --- |
 | `TMDB_READ_ACCESS_TOKEN` | required | Private application read token; no whitespace or Bearer prefix. |
 | `PORT` | `8080` | External Docker port used by Compose; ignored when running Go directly. |
+| `RELAY_IMAGE` | `ghcr.io/thegeeking/tmdb-proxy:1` | Production Compose image; accepts a version tag or digest. |
 | `LISTEN_ADDR` | `:8080` | HTTP host:port; port 1–65535. |
 | `VALKEY_URL` | `redis://valkey:6379/0` | Single Valkey instance, database selection, optional authentication. |
 | `TMDB_API_VERSIONS` | `3,4` | Comma-separated subset of `3,4`. |
@@ -113,7 +132,7 @@ Tests use an HTTP mock upstream and miniredis, a Valkey/Redis protocol-compatibl
 
 Release Please runs on pushes to `main` and opens or updates a release PR from Conventional Commits, including the version and CHANGELOG.md. Merge that PR to create the Git tag and GitHub release. The first release defaults to `v1.0.0`; subsequent versions follow commit types (`fix:`, `feat:`, and breaking changes).
 
-The same workflow then checks formatting, runs vet and race-enabled tests, builds binaries for Linux, macOS (`darwin`) and Windows on amd64 and arm64, publishes the container, and uploads binaries, `env.example` and SHA-256 checksums to the release. Publishing is driven directly by Release Please's job outputs in the same workflow: it does not depend on a bot-created tag triggering another workflow.
+The same workflow then checks formatting, runs vet and race-enabled tests, builds binaries for Linux, macOS (`darwin`) and Windows on amd64 and arm64, publishes the container, and uploads binaries, `env.example`, `compose.prod.yaml` and SHA-256 checksums to the release. Publishing is driven directly by Release Please's job outputs in the same workflow: it does not depend on a bot-created tag triggering another workflow.
 
 No custom secrets are needed. GitHub supplies `GITHUB_TOKEN`; the jobs explicitly request release, package and PR permissions. In Settings > Actions > General, enable **Allow GitHub Actions to create and approve pull requests**. Release Please uses that permission to open the PR; it does not automatically approve or merge it. The TMDB token stays in your runtime `.env`. Separate PR-check workflows are not automatically triggered by PRs created using this built-in token; configure a GitHub App or PAT only if you later need that behavior.
 
@@ -131,7 +150,7 @@ Replace `owner/repository` with your lowercase GitHub repository path. Git tags 
 
 The workflow uses the built-in GitHub token with `packages: write`; no Docker Hub account or registry secret is needed. For anonymous pulls, make the package public in its GitHub package settings; private packages require registry authentication. Credentials are supplied at runtime, never built into the image.
 
-To use the published image with the bundled Valkey, replace `build: .` in compose.yaml with `image: ghcr.io/owner/repository:1` and remove the `develop` section. Keep the existing `.env`, ports, and cache service. Run `docker compose pull relay` followed by `docker compose up -d` to apply the current image for that tag. Use `:1.2` to follow a minor version or `:1.2.3` to pin an exact release.
+Use `compose.prod.yaml` to run the published image with the bundled Valkey, as described in the production setup above. Set `RELAY_IMAGE` to `ghcr.io/owner/repository:1.2` to follow a minor version or `ghcr.io/owner/repository:1.2.3` to pin an exact release.
 
 ## Attribution and limitations
 

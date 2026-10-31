@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.3.0](https://github.com/TheGeeKing/tmdb-proxy/compare/v1.2.0...v1.3.0) (2026-10-31)
+
+
+### Features
+
+* expose instance rate limits and cache TTLs ([f71e58b](https://github.com/TheGeeKing/tmdb-proxy/commit/f71e58b2fadafee6dd3d03a1c8293b13382a6b11))
+
+
+### Bug Fixes
+
+* **ci:** update release actions and replace deprecated Node.js runtime ([59f2f53](https://github.com/TheGeeKing/tmdb-proxy/commit/59f2f530390359b249a96de029aae9784ccd67ce))
+
 ## [1.2.0](https://github.com/TheGeeKing/tmdb-proxy/compare/v1.1.1...v1.2.0) (2026-10-30)
 
 
